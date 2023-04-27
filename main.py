@@ -1,7 +1,10 @@
 import json
 import random
-
+import string
+import os.path
 from aiohttp import web
+
+PATH_JSON = 'links.json'
 
 html_text = """
 <!DOCTYPE html>
@@ -20,6 +23,18 @@ html_text = """
 """
 
 
+def read_links():
+    with open(PATH_JSON, mode='r', encoding='utf-8') as file:
+        links = json.load(file)
+
+    return links
+
+
+def write_links(links: dict):
+    with open(PATH_JSON, 'w', encoding='utf-8') as file:
+        json.dump(links, file)
+
+
 async def index(request):
     return web.Response(text=html_text, content_type='text/html')
 
@@ -27,25 +42,26 @@ async def index(request):
 async def result(request):
     data = await request.post()
     link = data['link']
+    links = {}
 
-    new_link = ''.join(random.choice('0123456789abcd') for _ in range(6))
+    new_link = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
 
-    with open('links.json', 'a') as file:
-        file.write(json.dumps({
-            new_link: link
-        }))
-    return web.Response(text=html_text, content_type='text/html')
+    if os.path.exists(PATH_JSON):
+        links = read_links()
+
+    links[new_link] = link
+    write_links(links)
+
+    return web.Response(text=f'Ваш код ссылки - {new_link}')
 
 
 async def redirect(request):
     new_link = request.match_info['new_link']
-    with open('data.json') as file:
-        links = json.load(file)
-
+    links = read_links()
     link = links.get(new_link)
 
     if link is None:
-        raise web.HTTPNotFound(text=f'Link not Found {new_link}')
+        raise web.HTTPNotFound(text=f'Ссылка не найдена {new_link}')
 
     raise web.HTTPFound(link)
 
