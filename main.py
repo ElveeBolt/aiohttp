@@ -40,7 +40,7 @@ async def get_link(new_link):
     engine = await init_pg()
     async with engine.acquire() as connection:
         result = await connection.execute(tbl.select().where(tbl.c.new_link == new_link))
-        result = await result
+        result = await result.first()
     return result
 
 
