@@ -1,74 +1,83 @@
-import json
+import os.path
 import random
 import string
-import os.path
+
+import aiohttp_jinja2
+import jinja2
 from aiohttp import web
-import aiofiles
 
-PATH_JSON = 'links.json'
+from aiopg.sa import create_engine
+import sqlalchemy as sa
 
-html_text = """
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
-<form method="POST">
-    <input type="text" name="link" placeholder="Введите ссылку">
-    <button type="submit">Сократить ссылку</button>
-</form>
-</body>
-</html>
-"""
+metadata = sa.MetaData()
+
+tbl = sa.Table(
+    'links', metadata,
+    sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column('link', sa.String(255)),
+    sa.Column('new_link', sa.String(255))
+)
 
 
-def read_links():
-    with aiofiles.open(PATH_JSON, mode='r', encoding='utf-8') as file:
-        json_links = await file.read()
-        links = json.loads(json_links)
-
-    return links
-
-
-def write_links(links: dict):
-    with aiofiles.open(PATH_JSON, 'w', encoding='utf-8') as file:
-        await file.write(json.dumps(links))
+async def init_pg():
+    engine = await create_engine(
+        user='postgres',
+        database='postgres',
+        host=os.getenv('POSTGRES_HOST', '127.0.0.1'),
+        password='postgres',
+        port=5432
+    )
+    return engine
 
 
+async def insert_link(link, new_link):
+    engine = await init_pg()
+    async with engine.acquire() as connection:
+        await connection.execute(tbl.insert().values(link=link, new_link=new_link))
+
+
+async def get_link(new_link):
+    engine = await init_pg()
+    async with engine.acquire() as connection:
+        result = await connection.execute(tbl.select().where(tbl.c.new_link == new_link))
+        result = await result
+    return result
+
+
+@aiohttp_jinja2.template('index.html')
 async def index(request):
-    return web.Response(text=html_text, content_type='text/html')
+    return {}
 
 
+@aiohttp_jinja2.template('result.html')
 async def result(request):
     data = await request.post()
     link = data['link']
-    links = {}
 
     new_link = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
 
-    if os.path.exists(PATH_JSON):
-        links = read_links()
+    await insert_link(link=link, new_link=new_link)
 
-    links[new_link] = link
-    write_links(links)
-
-    return web.Response(text=f'Ваш код ссылки - {new_link}')
+    return {'new_link': new_link}
 
 
 async def redirect(request):
     new_link = request.match_info['new_link']
-    links = read_links()
-    link = links.get(new_link)
+
+    link = await get_link(new_link)
 
     if link is None:
         raise web.HTTPNotFound(text=f'Ссылка не найдена {new_link}')
 
-    raise web.HTTPFound(link)
+    raise web.HTTPFound(link['link'])
 
 
 app = web.Application()
+
+aiohttp_jinja2.setup(
+    app, loader=jinja2.FileSystemLoader(os.path.join(os.getcwd(), 'templates'))
+)
+
 app.add_routes([
     web.get('/', index),
     web.post('/', result),
