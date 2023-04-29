@@ -3,6 +3,7 @@ import random
 import string
 import os.path
 from aiohttp import web
+import aiofiles
 
 PATH_JSON = 'links.json'
 
@@ -24,15 +25,16 @@ html_text = """
 
 
 def read_links():
-    with open(PATH_JSON, mode='r', encoding='utf-8') as file:
-        links = json.load(file)
+    with aiofiles.open(PATH_JSON, mode='r', encoding='utf-8') as file:
+        json_links = await file.read()
+        links = json.loads(json_links)
 
     return links
 
 
 def write_links(links: dict):
-    with open(PATH_JSON, 'w', encoding='utf-8') as file:
-        json.dump(links, file)
+    with aiofiles.open(PATH_JSON, 'w', encoding='utf-8') as file:
+        await file.write(json.dumps(links))
 
 
 async def index(request):
