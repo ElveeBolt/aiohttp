@@ -16,7 +16,7 @@ async def send_welcome(message: types.Message):
     await message.reply("Привет!\nЯ сокращаю ссылки")
 
 
-@dp.message_handler(commands=['my_links'])
+@dp.message_handler(commands=['get_my_links'])
 async def send_welcome(message: types.Message):
     links = await get_user_links(message.from_user.id)
     formated_links = []
