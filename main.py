@@ -5,43 +5,8 @@ import string
 import aiohttp_jinja2
 import jinja2
 from aiohttp import web
+from db_utils import insert_link, get_link
 
-from aiopg.sa import create_engine
-import sqlalchemy as sa
-
-metadata = sa.MetaData()
-
-tbl = sa.Table(
-    'links', metadata,
-    sa.Column('id', sa.Integer, primary_key=True, autoincrement=True),
-    sa.Column('link', sa.String(255)),
-    sa.Column('new_link', sa.String(255))
-)
-
-
-async def init_pg():
-    engine = await create_engine(
-        user='postgres',
-        database='postgres',
-        host=os.getenv('POSTGRES_HOST', '127.0.0.1'),
-        password='postgres',
-        port=5432
-    )
-    return engine
-
-
-async def insert_link(link, new_link):
-    engine = await init_pg()
-    async with engine.acquire() as connection:
-        await connection.execute(tbl.insert().values(link=link, new_link=new_link))
-
-
-async def get_link(new_link):
-    engine = await init_pg()
-    async with engine.acquire() as connection:
-        result = await connection.execute(tbl.select().where(tbl.c.new_link == new_link))
-        result = await result.first()
-    return result
 
 
 @aiohttp_jinja2.template('index.html')
@@ -72,16 +37,17 @@ async def redirect(request):
     raise web.HTTPFound(link['link'])
 
 
-app = web.Application()
+if __name__ == '__main__':
+    app = web.Application()
 
-aiohttp_jinja2.setup(
-    app, loader=jinja2.FileSystemLoader(os.path.join(os.getcwd(), 'templates'))
-)
+    aiohttp_jinja2.setup(
+        app, loader=jinja2.FileSystemLoader(os.path.join(os.getcwd(), 'templates'))
+    )
 
-app.add_routes([
-    web.get('/', index),
-    web.post('/', result),
-    web.get('/{new_link}', redirect)
-])
+    app.add_routes([
+        web.get('/', index),
+        web.post('/', result),
+        web.get('/{new_link}', redirect)
+    ])
 
-web.run_app(app)
+    web.run_app(app)
